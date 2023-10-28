@@ -21,3 +21,7 @@ USB device can normally draw current from the host through the VBUS depending on
   Up to 0.5 mA (2.5 mA if configured as high power). The current of the pull up and \
    pull down resistors must be considered (they sink ~ 0.2 mA). \
    USB device can draw more current -if needed- according to battery charging and power delivery specifications.
+
+# clock config
+
+![stm32cubemx clock config](./images/Screenshot%20from%202023-10-28%2019-38-24.png)
