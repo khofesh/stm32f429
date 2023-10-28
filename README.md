@@ -8,3 +8,6 @@
 # References
 
 - https://www.st.com/en/evaluation-tools/32f429idiscovery.html#overview
+- https://wiki.wireshark.org/CaptureSetup/USB
+- STM32 USB training - https://www.st.com/content/st_com/en/support/learning/stm32-education/stm32-moocs/STM32-USB-training.html
+- MOOC - STM32 USB training - https://www.youtube.com/playlist?list=PLnMKNibPkDnFFRBVD206EfnnHhQZI4Hxa
