@@ -34,5 +34,8 @@ int main(void)
 	log_info("program entrypoint");
 
     /* Loop forever */
-	for(ever);
+	for(ever)
+	{
+
+	}
 }
