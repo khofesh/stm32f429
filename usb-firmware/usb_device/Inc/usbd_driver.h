@@ -16,5 +16,9 @@
 #define USB_OTG_HS_DEVICE ((USB_OTG_DeviceTypeDef *)(USB_OTG_HS_PERIPH_BASE + USB_OTG_DEVICE_BASE))
 #define USB_OTG_HS_PCGCCTL ((uint32_t *)(USB_OTG_HS_PERIPH_BASE + USB_OTG_PCGCCTL_BASE)) // Power and clock gating control register
 
+void disconnect();
+void connect();
+void initialize_core();
+void initialize_gpio_pins();
 
 #endif /* USBD_DRIVER_H_ */

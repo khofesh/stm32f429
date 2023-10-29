@@ -25,6 +25,7 @@
 #include "stm32f429xx.h"
 
 #include "Helpers/logger.h"
+#include "usbd_framework.h"
 
 #define ever			;;
 
@@ -32,6 +33,8 @@
 int main(void)
 {
 	log_info("program entrypoint");
+
+//	usbd_initialize();
 
     /* Loop forever */
 	for(ever)

@@ -25,3 +25,13 @@ USB device can normally draw current from the host through the VBUS depending on
 # clock config
 
 ![stm32cubemx clock config](./images/Screenshot%20from%202023-10-28%2019-38-24.png)
+
+# USB core global interrupts
+
+In STM32F429ZI microcontroller (based on ARM Cortex-M4) we basically have 5 interrupts that exist in "USB Core Global Interrupts" register. We will spend quite a lot of time implementing the handlers of these interrupts. Here I just want to tell you when every one of these interrupts is raised.
+
+- USB Reset Signal: this interrupt is raised when the USB device received a USB reset signal on the bus from the host.
+- USB Device Speed Enumeration Done: this interrupt is raised when USB reset is done and at this moment the device knows in which speed it should run.
+- USB RxFIFO Not Empty: this interrupt is raised when the device has received data from the host (and the data is ready to be read from the RxFIFO of the USB device).
+- USB IN Endpoint Interrupt: this interrupt is raised whenever an interrupt is raised on any endpoint. To know which interrupt exactly was raised and on which IN endpoint, another register (other than Core Global Interrupts) should be read.
+- USB OUT Endpoint Interrupt: as same as USB IN Endpoint Interrupt but for OUT endpoints.
