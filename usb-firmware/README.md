@@ -26,6 +26,13 @@ USB device can normally draw current from the host through the VBUS depending on
 
 ![stm32cubemx clock config](./images/Screenshot%20from%202023-10-28%2019-38-24.png)
 
+# journalctl
+
+```shell
+$ journalctl -f
+Oct 29 10:57:07 ryzen kernel: usb 5-3.4.1: new full-speed USB device number 17 using xhci_hcd
+```
+
 # USB core global interrupts
 
 In STM32F429ZI microcontroller (based on ARM Cortex-M4) we basically have 5 interrupts that exist in "USB Core Global Interrupts" register. We will spend quite a lot of time implementing the handlers of these interrupts. Here I just want to tell you when every one of these interrupts is raised.
