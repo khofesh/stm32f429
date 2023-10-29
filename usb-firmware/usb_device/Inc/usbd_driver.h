@@ -11,14 +11,47 @@
 #define USBD_DRIVER_H_
 
 #include "stm32f4xx.h"
+#include "usb_standards.h"
 
 #define USB_OTG_HS_GLOBAL ((USB_OTG_GlobalTypeDef *)(USB_OTG_HS_PERIPH_BASE + USB_OTG_GLOBAL_BASE))
 #define USB_OTG_HS_DEVICE ((USB_OTG_DeviceTypeDef *)(USB_OTG_HS_PERIPH_BASE + USB_OTG_DEVICE_BASE))
 #define USB_OTG_HS_PCGCCTL ((uint32_t *)(USB_OTG_HS_PERIPH_BASE + USB_OTG_PCGCCTL_BASE)) // Power and clock gating control register
 
+/**
+ *  Total count of IN or OUT endpoints
+ *  reference manual
+ *  35.2.3 Peripheral-mode features
+ */
+#define ENDPOINT_COUNT 6
+
 void disconnect();
 void connect();
 void initialize_core();
 void initialize_gpio_pins();
+
+/**
+ * @params endpoint_number The number of the IN endpoint we want to access its registers.
+ *
+ * reference manual
+ * OTG device endpoint-x control register (OTG_HS_DIEPCTLx) (x = 0..5, where x = Endpoint_number)
+ * 	Address offset: 0x900 + 0x20 * x
+ */
+inline static USB_OTG_INEndpointTypeDef * IN_ENDPOINT(uint8_t endpoint_number)
+{
+	return (USB_OTG_INEndpointTypeDef *)(USB_OTG_HS_PERIPH_BASE + USB_OTG_IN_ENDPOINT_BASE + (endpoint_number * 0x20));
+}
+
+/**
+ * returns the structure contains the registers of a specific OUT endpoint.
+ * @param endpoint_number the number of the OUT endpoint we want to access its registers
+ *
+ * reference manual
+ * OTG_HS device endpoint-x control register (OTG_HS_DOEPCTLx) (x = 1..5, where x = Endpoint_number)
+ * 	Address offset for OUT endpoints: 0xB00 + 0x20 * x
+ */
+inline static USB_OTG_OUTEndpointTypeDef * OUT_ENDPOINT(uint8_t endpoint_number)
+{
+	return (USB_OTG_OUTEndpointTypeDef *)(USB_OTG_HS_PERIPH_BASE + USB_OTG_OUT_ENDPOINT_BASE + (endpoint_number * 0x20));
+}
 
 #endif /* USBD_DRIVER_H_ */

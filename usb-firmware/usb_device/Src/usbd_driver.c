@@ -7,6 +7,11 @@
 
 #include "usbd_driver.h"
 
+static void usbrst_handler();
+static void configure_endpoint0(uint8_t endpoint_size);
+static void configure_in_endpoint(uint8_t endpoint_number, UsbEndpointType endpoint_type, uint16_t endpoint_size);
+static void deconfigure_endpoint(uint8_t endpoint_number);
+
 void initialize_gpio_pins()
 {
 	/* enable the clock for GPIOB */
@@ -81,7 +86,7 @@ void initialize_core()
 	/* unmask the main USB core interrupt */
 	USB_OTG_HS->GINTMSK |= USB_OTG_GINTMSK_USBRST | USB_OTG_GINTMSK_ENUMDNEM |
 			USB_OTG_GINTMSK_SOFM | USB_OTG_GINTMSK_USBSUSPM | USB_OTG_GINTMSK_WUIM |
-			USB_OTG_GINTMSK_IEPINT | USB_OTG_GINTMSK_RXFLVLM;
+			USB_OTG_GINTMSK_IEPINT | USB_OTG_GINTMSK_RXFLVLM | USB_OTG_GINTSTS_OEPINT;
 
 	/* clear all pending core interrupts */
 	USB_OTG_HS->GINTSTS = 0xFFFFFFFF;
@@ -115,4 +120,123 @@ void disconnect()
 
 	/* powers the transceivers off */
 	USB_OTG_HS->GCCFG &= ~USB_OTG_GCCFG_PWRDWN;
+}
+
+static void configure_endpoint0(uint8_t endpoint_size)
+{
+	/* unmask all interrupts of IN and OUT endpoint0 */
+	USB_OTG_HS_DEVICE->DAINTMSK |= (1UL << 0) | (1UL << 16);
+
+	/**
+	 * Configures the maximum packet size, activates the endpoint,
+	 * and NAK the endpoint (cannot send data yet).
+	 *
+	 * (OTG_HS_DIEPCTLx)
+	 */
+	MODIFY_REG(IN_ENDPOINT(0)->DIEPCTL,
+		USB_OTG_DIEPCTL_MPSIZ,
+		USB_OTG_DIEPCTL_USBAEP | _VAL2FLD(USB_OTG_DIEPCTL_MPSIZ, endpoint_size) | USB_OTG_DIEPCTL_SNAK
+	);
+
+	/* clear NAK and enable endpoint data transmission */
+	OUT_ENDPOINT(0)->DOEPCTL |= USB_OTG_DOEPCTL_EPENA | USB_OTG_DOEPCTL_CNAK;
+}
+
+static void configure_in_endpoint(uint8_t endpoint_number, UsbEndpointType endpoint_type, uint16_t endpoint_size)
+{
+	/* unmasks all interrupts of the targeted IN endpoint.*/
+	USB_OTG_HS_DEVICE->DAINTMSK |= (1UL<<endpoint_number);
+
+	/**
+	 * activates the endpoint, sets endpoint handshake to NAK (not ready to send data), sets DATA0 packet identifier,
+	 * configures its type, its maximum packet size, and assigns it a TxFIFO.
+	 */
+	MODIFY_REG(IN_ENDPOINT(endpoint_number)->DIEPCTL,
+		USB_OTG_DIEPCTL_MPSIZ | USB_OTG_DIEPCTL_EPTYP,
+		USB_OTG_DIEPCTL_USBAEP | _VAL2FLD(USB_OTG_DIEPCTL_MPSIZ, endpoint_size) | USB_OTG_DIEPCTL_SNAK |
+		_VAL2FLD(USB_OTG_DIEPCTL_EPTYP, endpoint_type) | USB_OTG_DIEPCTL_SD0PID_SEVNFRM
+	);
+}
+
+static void deconfigure_endpoint(uint8_t endpoint_number)
+{
+    USB_OTG_INEndpointTypeDef *in_endpoint = IN_ENDPOINT(endpoint_number);
+    USB_OTG_OUTEndpointTypeDef *out_endpoint = OUT_ENDPOINT(endpoint_number);
+
+	/**
+	 * masks all interrupts of the targeted IN and OUT endpoints.
+	 * (OTG_HS_DAINTMSK)
+	 */
+	CLEAR_BIT(USB_OTG_HS_DEVICE->DAINTMSK,
+		(1 << endpoint_number) | (1 << 16 << endpoint_number)
+	);
+
+	/* clears all interrupts of the endpoint */
+	/* (OTG_HS_DIEPINTx) */
+	in_endpoint->DIEPINT |= 0x29FF; // 0010 1001 1111 1111 (the first 16 bits)
+	/* (OTG_HS_DOEPINTx) */
+    out_endpoint->DOEPINT |= 0x715F; // 0111 0001 0101 1111 (the first 16 bits)
+
+	/* disables the endpoints if possible */
+    if (in_endpoint->DIEPCTL & USB_OTG_DIEPCTL_EPENA)
+    {
+		/* Disables endpoint transmission. */
+		in_endpoint->DIEPCTL |= USB_OTG_DIEPCTL_EPDIS;
+    }
+
+	/* deactivates the endpoint */
+	in_endpoint->DIEPCTL &= ~USB_OTG_DIEPCTL_USBAEP;
+
+    if (endpoint_number != 0)
+    {
+		if (out_endpoint->DOEPCTL & USB_OTG_DOEPCTL_EPENA)
+		{
+			/* disables endpoint transmission */
+			out_endpoint->DOEPCTL |= USB_OTG_DOEPCTL_EPDIS;
+		}
+
+		/* deactivates the endpoint */
+		out_endpoint->DOEPCTL &= ~USB_OTG_DOEPCTL_USBAEP;
+    }
+}
+
+static void usbrst_handler()
+{
+	for (uint8_t i = 0; i <= ENDPOINT_COUNT; i++)
+	{
+
+	}
+}
+
+/**
+ * handle the USB core interrupts
+ */
+void gintsts_handler()
+{
+	volatile uint32_t gintsts = USB_OTG_HS_GLOBAL->GINTSTS;
+
+	if (gintsts & USB_OTG_GINTSTS_USBRST)
+	{
+		/* do something */
+
+
+		/* clears the interrupt */
+		USB_OTG_HS_GLOBAL->GINTSTS |= USB_OTG_GINTSTS_USBRST;
+	}
+	else if (gintsts & USB_OTG_GINTSTS_ENUMDNE)
+	{
+
+	}
+	else if (gintsts & USB_OTG_GINTSTS_RXFLVL)
+	{
+
+	}
+	else if (gintsts & USB_OTG_GINTSTS_IEPINT)
+	{
+
+	}
+	else if (gintsts & USB_OTG_GINTSTS_OEPINT)
+	{
+
+	}
 }
