@@ -3,6 +3,12 @@
  *
  *  Created on: Oct 28, 2023
  *      Author: fahmad
+ *
+ *  34.11 	Peripheral FIFO architecture
+ *  	Figure 392. Device-mode FIFO address mapping and AHB FIFO access mapping
+ *  34.13	FIFO RAM allocation
+ *
+ *
  */
 
 #include "usbd_driver.h"
@@ -11,6 +17,9 @@ static void usbrst_handler();
 static void configure_endpoint0(uint8_t endpoint_size);
 static void configure_in_endpoint(uint8_t endpoint_number, UsbEndpointType endpoint_type, uint16_t endpoint_size);
 static void deconfigure_endpoint(uint8_t endpoint_number);
+static void refresh_fifo_start_addresses();
+static void configure_rxfifo_size(uint16_t size);
+static void configure_txfifo_size(uint8_t endpoint_number, uint16_t size);
 
 void initialize_gpio_pins()
 {
@@ -198,6 +207,104 @@ static void deconfigure_endpoint(uint8_t endpoint_number)
 		/* deactivates the endpoint */
 		out_endpoint->DOEPCTL &= ~USB_OTG_DOEPCTL_USBAEP;
     }
+}
+
+static void refresh_fifo_start_addresses()
+{
+	/* The first changeable start address begins after the region of RxFIFO */
+	uint16_t start_address = _FLD2VAL(USB_OTG_GRXFSIZ_RXFD, USB_OTG_HS->GRXFSIZ) * 4;
+
+	/**
+	 *  Updates the start address of the TxFIFO0
+	 *
+	 *  OTG_FS Host non-periodic transmit FIFO size register
+	 *  (OTG_FS_HNPTXFSIZ)/Endpoint 0 Transmit FIFO size (OTG_FS_DIEPTXF0)
+	 *  	Bits 15:0 TX0FSA: Endpoint 0 transmit RAM start address
+	 */
+	MODIFY_REG(USB_OTG_HS->DIEPTXF0_HNPTXFSIZ,
+			USB_OTG_TX0FSA,
+			_VAL2FLD(USB_OTG_TX0FSA, start_address)
+	);
+
+	/* The next start address is after where the last TxFIFO ends */
+	start_address += _FLD2VAL(USB_OTG_TX0FD, USB_OTG_HS->DIEPTXF0_HNPTXFSIZ) * 4;
+
+	/* Updates the start addresses of the rest TxFIFOs */
+	for (uint8_t txfifo_number = 0; txfifo_number < ENDPOINT_COUNT - 1; txfifo_number++)
+	{
+		/**
+		 * OTG_HS device IN endpoint transmit FIFO size register (OTG_HS_DIEPTXFx)
+		 * (x = 1..5, where x is the FIFO_number)
+		 *
+		 * Bits 15:0 INEPTXSA: IN endpoint FIFOx transmit RAM start address
+		 */
+		MODIFY_REG(USB_OTG_HS->DIEPTXF[txfifo_number],
+//				 USB_OTG_NPTXFSA, this is wrong I guess
+				USB_OTG_DIEPTXF_INEPTXSA,
+				_VAL2FLD(USB_OTG_DIEPTXF_INEPTXSA, start_address)
+		);
+
+		start_address += _FLD2VAL(USB_OTG_NPTXFD, USB_OTG_HS->DIEPTXF[txfifo_number]) * 4;
+	}
+}
+
+/**
+ * configures the RxFIFO of all OUT endpoints.
+ * the RxFIFO is shared between all OUT endpoints.
+ */
+static void configure_rxfifo_size(uint16_t size)
+{
+	/* considers the space required to save status packets in RxFIFO and gets the size in term of 32-bit words */
+	size = 10 + (2 * ((size / 4) + 1));
+
+	/**
+	 *  configure the depth of the FIFO
+	 *  OTG_HS Receive FIFO size register (OTG_HS_GRXFSIZ)
+	 *  	Bits 15:0 	RXFD: RxFIFO depth
+	 */
+	MODIFY_REG(USB_OTG_HS->GRXFSIZ,
+			USB_OTG_GRXFSIZ_RXFD,
+			_VAL2FLD(USB_OTG_GRXFSIZ_RXFD, size)
+	);
+
+	refresh_fifo_start_addresses();
+}
+
+static void configure_txfifo_size(uint8_t endpoint_number, uint16_t size)
+{
+	/* get the FIFO size in term of 32-bit words */
+	size = (size + 3)/4;
+
+	/* configures the depth of the TxFIFO */
+	if (endpoint_number == 0)
+	{
+		/**
+		 * OTG_FS Host non-periodic transmit FIFO size register
+		 * (OTG_FS_HNPTXFSIZ)/Endpoint 0 Transmit FIFO size (OTG_FS_DIEPTXF0)
+		 *
+		 * Device mode
+		 * 	Bits 31:16 TX0FD: Endpoint 0 TxFIFO depth
+		 */
+		MODIFY_REG(USB_OTG_HS->DIEPTXF0_HNPTXFSIZ,
+				USB_OTG_TX0FD,
+				_VAL2FLD(USB_OTG_TX0FD, size)
+		);
+	}
+	else
+	{
+		/**
+		 * OTG_HS device IN endpoint transmit FIFO size register (OTG_HS_DIEPTXFx)
+		 * (x = 1..5, where x is the FIFO_number)
+		 *
+		 * Bits 31:16 INEPTXFD: IN endpoint TxFIFO depth
+		 */
+		MODIFY_REG(USB_OTG_HS->DIEPTXF[endpoint_number - 1],
+				USB_OTG_DIEPTXF_INEPTXFD, // I think mohammed did a mistake here, should've been INEPTXFD
+				_VAL2FLD(USB_OTG_DIEPTXF_INEPTXFD, size)
+		);
+	}
+
+	refresh_fifo_start_addresses();
 }
 
 static void usbrst_handler()

@@ -42,3 +42,15 @@ In STM32F429ZI microcontroller (based on ARM Cortex-M4) we basically have 5 inte
 - USB RxFIFO Not Empty: this interrupt is raised when the device has received data from the host (and the data is ready to be read from the RxFIFO of the USB device).
 - USB IN Endpoint Interrupt: this interrupt is raised whenever an interrupt is raised on any endpoint. To know which interrupt exactly was raised and on which IN endpoint, another register (other than Core Global Interrupts) should be read.
 - USB OUT Endpoint Interrupt: as same as USB IN Endpoint Interrupt but for OUT endpoints.
+
+# kinda looks the same
+
+```C
+#define USB_OTG_NPTXFSA_Pos                      (0U)
+#define USB_OTG_NPTXFSA_Msk                      (0xFFFFUL << USB_OTG_NPTXFSA_Pos) /*!< 0x0000FFFF */
+#define USB_OTG_NPTXFSA                          USB_OTG_NPTXFSA_Msk
+
+#define USB_OTG_DIEPTXF_INEPTXSA_Pos             (0U)
+#define USB_OTG_DIEPTXF_INEPTXSA_Msk             (0xFFFFUL << USB_OTG_DIEPTXF_INEPTXSA_Pos) /*!< 0x0000FFFF */
+#define USB_OTG_DIEPTXF_INEPTXSA                 USB_OTG_DIEPTXF_INEPTXSA_Msk  /*!< IN endpoint FIFOx transmit RAM start address */
+```
