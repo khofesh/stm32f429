@@ -51,6 +51,8 @@ static void setup_data_received_handler(uint8_t endpoint_number, uint16_t byte_c
 {
 	usb_driver.read_packet(usbd_handle->ptr_out_buffer, byte_count);
 
+	log_debug_array("setup data: ", usbd_handle->ptr_out_buffer, byte_count);
+
 	process_request();
 }
 
