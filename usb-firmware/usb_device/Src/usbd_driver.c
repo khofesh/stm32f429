@@ -22,10 +22,28 @@ static void deconfigure_endpoint(uint8_t endpoint_number);
 static void refresh_fifo_start_addresses();
 static void configure_rxfifo_size(uint16_t size);
 static void configure_txfifo_size(uint8_t endpoint_number, uint16_t size);
+static void read_packet(void const *buffer, uint16_t size);
+static void write_packet(uint8_t endpoint_number, void const *buffer, uint16_t size);
 static void flush_rxfifo();
 static void flush_txfifo(uint8_t endpoint_number);
+static void disconnect();
+static void connect();
+static void initialize_core();
+static void initialize_gpio_pins();
 
-void initialize_gpio_pins()
+const UsbDriver usb_driver = {
+	.initialize_core = &initialize_core,
+	.initialize_gpio_pins = &initialize_gpio_pins,
+	.connect = &connect,
+	.disconnect = &disconnect,
+	.flush_rxfifo = &flush_rxfifo,
+	.flush_txfifo = &flush_txfifo,
+	.configure_in_endpoint = &configure_in_endpoint,
+	.read_packet = &read_packet,
+	.write_packet = &write_packet
+};
+
+static void initialize_gpio_pins()
 {
 	/* enable the clock for GPIOB */
 	SET_BIT(RCC->AHB1ENR, RCC_AHB1ENR_GPIOBEN);
@@ -49,7 +67,7 @@ void initialize_gpio_pins()
 	);
 }
 
-void initialize_core()
+static void initialize_core()
 {
 	/* enable the clock for USB core */
 	RCC->AHB1ENR |= RCC_AHB1ENR_OTGHSEN;
@@ -126,7 +144,7 @@ void initialize_core()
 /**
  * connect the USB device to the bus
  */
-void connect()
+static void connect()
 {
 	/* power the transceivers on */
 	USB_OTG_HS->GCCFG |= USB_OTG_GCCFG_PWRDWN;
@@ -138,13 +156,89 @@ void connect()
 /**
  * disconnect the USB device from the bus
  */
-void disconnect()
+static void disconnect()
 {
 	/* disconnects the device from the bus */
 	USB_OTG_HS_DEVICE->DCTL |= USB_OTG_DCTL_SDIS;
 
 	/* powers the transceivers off */
 	USB_OTG_HS->GCCFG &= ~USB_OTG_GCCFG_PWRDWN;
+}
+
+/**
+ * pop data from the RxFIFO and stores it in the buffer
+ */
+static void read_packet(void const *buffer, uint16_t size)
+{
+	/* there is only one RxFIFO */
+	volatile uint32_t *fifo = FIFO(0);
+
+	for(; size >= 4; size -=4, buffer += 4)
+	{
+		/* pop one 32-bit word of data (until there is less than one word remaining) */
+		uint32_t data = *fifo;
+
+		/* stores the data in the buffer */
+		*((uint32_t *)buffer) = data;
+	}
+
+	if(size > 0)
+	{
+		/* pop the last remaining bytes (which are less than one word) */
+		uint32_t data = *fifo;
+
+		/* 1 byte */
+		for(; size > 0; size--, buffer++, data >>= 8)
+		{
+			/* stores the data in the buffer with the correct alignment */
+			*((uint8_t *)buffer) = 0xFF & data;
+		}
+	}
+}
+
+static void write_packet(uint8_t endpoint_number, void const *buffer, uint16_t size)
+{
+	volatile uint32_t *fifo = FIFO(endpoint_number);
+	USB_OTG_INEndpointTypeDef *in_endpoint = IN_ENDPOINT(endpoint_number);
+
+	/**
+	 * configure the transmission (1 packet that has "size" bytes)
+	 *
+	 * OTG_HS device endpoint-x transfer size register (OTG_HS_DIEPTSIZx)
+	 * 	(x = 1..5, where x = Endpoint_number)
+	 *
+	 *  	Bit 28:19 PKTCNT: Packet count
+	 *  	Bits 18:0 XFRSIZ: Transfer size
+	 */
+	MODIFY_REG(
+		in_endpoint->DIEPTSIZ,
+		USB_OTG_DIEPTSIZ_PKTCNT | USB_OTG_DIEPTSIZ_XFRSIZ,
+		_VAL2FLD(USB_OTG_DIEPTSIZ_PKTCNT, 1) | _VAL2FLD(USB_OTG_DIEPTSIZ_XFRSIZ, size)
+	);
+
+	/**
+	 * enable the transmission after clearing both STALL and NAK of the endpoint
+	 *
+	 * OTG device endpoint-x control register (OTG_HS_DIEPCTLx)
+	 * (x = 0..5, where x = Endpoint_number)
+	 * 		Bit 21 STALL: STALL handshake
+	 * 		Bit 26 CNAK: Clear NAK
+	 * 		Bit 31 EPENA: Endpoint enable
+	 */
+	MODIFY_REG(
+		in_endpoint->DIEPCTL,
+		USB_OTG_DIEPCTL_STALL,
+		USB_OTG_DOEPCTL_CNAK | USB_OTG_DOEPCTL_EPENA
+	);
+
+	/* get the size in term of 32-bit words (to avoid integer overflow in the loop) */
+	size = (size + 3)/4;
+
+	for(; size > 0; size--, buffer += 4)
+	{
+		/* pushes the data to the TxFIFO */
+		*fifo = *((uint32_t *)buffer);
+	}
 }
 
 /**
@@ -416,6 +510,16 @@ static void rxflvl_handler()
 			break;
 		case 0x02: //0010: OUT data packet received
 			break;
+		case 0x04: //0100: SETUP transaction completed
+			/* re-enable the transmission on the endpoint */
+			OUT_ENDPOINT(endpoint_number)->DOEPCTL |= USB_OTG_DOEPCTL_CNAK;
+			OUT_ENDPOINT(endpoint_number)->DOEPCTL |= USB_OTG_DOEPCTL_EPENA;
+			break;
+		case 0x03: //0011: OUT transfer completed
+			/* re-enable the transmission on the endpoint */
+			OUT_ENDPOINT(endpoint_number)->DOEPCTL |= USB_OTG_DOEPCTL_CNAK;
+			OUT_ENDPOINT(endpoint_number)->DOEPCTL |= USB_OTG_DOEPCTL_EPENA;
+			break;
 	}
 }
 
@@ -457,3 +561,5 @@ void gintsts_handler()
 
 	}
 }
+
+

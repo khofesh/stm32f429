@@ -9,7 +9,7 @@
 
 void usbd_initialize()
 {
-	initialize_gpio_pins();
-	initialize_core();
-	connect();
+	usb_driver.initialize_gpio_pins();
+	usb_driver.initialize_core();
+	usb_driver.connect();
 }

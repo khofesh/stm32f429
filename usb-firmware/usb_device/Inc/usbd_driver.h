@@ -25,10 +25,7 @@
  */
 #define ENDPOINT_COUNT 6
 
-void disconnect();
-void connect();
-void initialize_core();
-void initialize_gpio_pins();
+
 
 /**
  * @params endpoint_number The number of the IN endpoint we want to access its registers.
@@ -59,5 +56,20 @@ inline static __IO uint32_t *FIFO(uint8_t endpoint_number)
 {
 	return (__IO uint32_t *)(USB_OTG_HS_PERIPH_BASE + USB_OTG_FIFO_BASE + (endpoint_number * 0x1000));
 }
+
+/* USB driver functions exposed to USB framework */
+typedef struct {
+	void (*initialize_core)();
+	void (*initialize_gpio_pins)();
+	void (*connect)();
+	void (*disconnect)();
+	void (*flush_rxfifo)();
+	void (*flush_txfifo)(uint8_t endpoint_number);
+	void (*configure_in_endpoint)(uint8_t endpoint_number, enum UsbEndpointType endpoint_type, uint16_t endpoint_size);
+	void (*read_packet)(void const *buffer, uint16_t size);
+	void (*write_packet)(uint8_t endpoint_number, void const *buffer, uint16_t size);
+} UsbDriver;
+
+extern const UsbDriver usb_driver;
 
 #endif /* USBD_DRIVER_H_ */
