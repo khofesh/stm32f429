@@ -4,22 +4,26 @@
  *  Created on: Oct 28, 2023
  *      Author: fahmad
  *
- *  34.11 	Peripheral FIFO architecture
+ *  34.11 		Peripheral FIFO architecture
  *  	Figure 392. Device-mode FIFO address mapping and AHB FIFO access mapping
- *  34.13	FIFO RAM allocation
+ *  34.13		FIFO RAM allocation
  *
- *
+ *	35.13.6 	Device programming model
  */
 
 #include "usbd_driver.h"
 
 static void usbrst_handler();
+static void enumdne_handler();
+static void rxflvl_handler();
 static void configure_endpoint0(uint8_t endpoint_size);
 static void configure_in_endpoint(uint8_t endpoint_number, UsbEndpointType endpoint_type, uint16_t endpoint_size);
 static void deconfigure_endpoint(uint8_t endpoint_number);
 static void refresh_fifo_start_addresses();
 static void configure_rxfifo_size(uint16_t size);
 static void configure_txfifo_size(uint8_t endpoint_number, uint16_t size);
+static void flush_rxfifo();
+static void flush_txfifo(uint8_t endpoint_number);
 
 void initialize_gpio_pins()
 {
@@ -104,7 +108,19 @@ void initialize_core()
 	/* unmask  USB global interrupt */
 	USB_OTG_HS->GAHBCFG |= USB_OTG_GAHBCFG_GINT;
 
-
+	/**
+	 * unmask transfer completed interrupt for all endpoints
+	 *
+	 * OTG_HS device IN endpoint common interrupt mask register
+	 * (OTG_HS_DIEPMSK)
+	 * 		Bit 0 XFRCM: Transfer completed interrupt mask
+	 *
+	 * OTG_HS device OUT endpoint common interrupt mask register
+	 * (OTG_HS_DOEPMSK)
+	 * 		Bit 0 XFRCM: Transfer completed interrupt mask
+	 */
+	USB_OTG_HS_DEVICE->DOEPMSK |= USB_OTG_DOEPMSK_XFRCM;
+	USB_OTG_HS_DEVICE->DIEPMSK |= USB_OTG_DIEPMSK_XFRCM;
 }
 
 /**
@@ -131,6 +147,37 @@ void disconnect()
 	USB_OTG_HS->GCCFG &= ~USB_OTG_GCCFG_PWRDWN;
 }
 
+/**
+ * flushes the RxFIFI of all OUT endpoints
+ */
+static void flush_rxfifo()
+{
+	/**
+	 * OTG_HS reset register (OTG_HS_GRSTCTL)
+	 * 		Bit 4 RXFFLSH: RxFIFO flush
+	 */
+	USB_OTG_HS->GRSTCTL |= USB_OTG_GRSTCTL_RXFFLSH;
+}
+
+/**
+ * flushes the TxFIFO of an IN endpoint
+ * endpoint_number - the number of an IN endpoint TO FLUSH ITS TxFIFO
+ */
+static void flush_txfifo(uint8_t endpoint_number)
+{
+	/**
+	 *	OTG_HS reset register (OTG_HS_GRSTCTL)
+	 *		Bits 10:6 TXFNUM: TxFIFO number
+	 *		Bit 5 TXFFLSH: TxFIFO flush
+	 */
+	MODIFY_REG(
+		USB_OTG_HS->GRSTCTL,
+		USB_OTG_GRSTCTL_TXFNUM,
+		_VAL2FLD(USB_OTG_GRSTCTL_TXFNUM, endpoint_number) |
+		USB_OTG_GRSTCTL_TXFFLSH
+	);
+}
+
 static void configure_endpoint0(uint8_t endpoint_size)
 {
 	/* unmask all interrupts of IN and OUT endpoint0 */
@@ -149,6 +196,12 @@ static void configure_endpoint0(uint8_t endpoint_size)
 
 	/* clear NAK and enable endpoint data transmission */
 	OUT_ENDPOINT(0)->DOEPCTL |= USB_OTG_DOEPCTL_EPENA | USB_OTG_DOEPCTL_CNAK;
+
+	/**
+	 * 64 bytes is the maximum packet size for full speed USB devices
+	 */
+	configure_rxfifo_size(64);
+	configure_txfifo_size(0, endpoint_size);
 }
 
 static void configure_in_endpoint(uint8_t endpoint_number, UsbEndpointType endpoint_type, uint16_t endpoint_size)
@@ -161,10 +214,13 @@ static void configure_in_endpoint(uint8_t endpoint_number, UsbEndpointType endpo
 	 * configures its type, its maximum packet size, and assigns it a TxFIFO.
 	 */
 	MODIFY_REG(IN_ENDPOINT(endpoint_number)->DIEPCTL,
-		USB_OTG_DIEPCTL_MPSIZ | USB_OTG_DIEPCTL_EPTYP,
+		USB_OTG_DIEPCTL_MPSIZ | USB_OTG_DIEPCTL_EPTYP | USB_OTG_DIEPCTL_TXFNUM,
 		USB_OTG_DIEPCTL_USBAEP | _VAL2FLD(USB_OTG_DIEPCTL_MPSIZ, endpoint_size) | USB_OTG_DIEPCTL_SNAK |
-		_VAL2FLD(USB_OTG_DIEPCTL_EPTYP, endpoint_type) | USB_OTG_DIEPCTL_SD0PID_SEVNFRM
+		_VAL2FLD(USB_OTG_DIEPCTL_EPTYP, endpoint_type) | _VAL2FLD(USB_OTG_DIEPCTL_TXFNUM, endpoint_number) |
+		USB_OTG_DIEPCTL_SD0PID_SEVNFRM
 	);
+
+	configure_txfifo_size(endpoint_number, endpoint_size);
 }
 
 static void deconfigure_endpoint(uint8_t endpoint_number)
@@ -207,6 +263,10 @@ static void deconfigure_endpoint(uint8_t endpoint_number)
 		/* deactivates the endpoint */
 		out_endpoint->DOEPCTL &= ~USB_OTG_DOEPCTL_USBAEP;
     }
+
+    // flushes the FIFOs
+    flush_txfifo(endpoint_number);
+    flush_rxfifo();
 }
 
 static void refresh_fifo_start_addresses()
@@ -309,9 +369,53 @@ static void configure_txfifo_size(uint8_t endpoint_number, uint16_t size)
 
 static void usbrst_handler()
 {
+	log_info("USB reset signal was detected");
+
 	for (uint8_t i = 0; i <= ENDPOINT_COUNT; i++)
 	{
+		deconfigure_endpoint(i);
+	}
+}
 
+static void enumdne_handler()
+{
+	log_info("USB device speed enumeration done.");
+
+	// 8 bytes - now hardcoded
+	configure_endpoint0(8);
+}
+
+static void rxflvl_handler()
+{
+	/* pop the status information word from RxFIFO */
+	uint32_t receive_status = USB_OTG_HS_GLOBAL->GRXSTSP;
+
+	/* the endpoint that received the data */
+	uint8_t endpoint_number = _FLD2VAL(USB_OTG_GRXSTSP_EPNUM, receive_status);
+
+	/* the count of bytes in the received packet */
+	uint16_t bcnt = _FLD2VAL(USB_OTG_GRXSTSP_BCNT, receive_status);
+
+	/* the status of the received packet */
+	uint16_t pktsts = _FLD2VAL(USB_OTG_GRXSTSP_PKTSTS, receive_status);
+
+	/**
+	 * OTG_HS Receive status debug read/OTG status read and pop registers
+	 * (OTG_HS_GRXSTSR/OTG_HS_GRXSTSP)
+	 * 		Bits 20:17 PKTSTS: Packet status
+	 * 		Indicates the status of the received packet
+	 * 		0001: Global OUT NAK (triggers an interrupt)
+	 * 		0010: OUT data packet received
+	 * 		0011: OUT transfer completed (triggers an interrupt)
+	 * 		0100: SETUP transaction completed (triggers an interrupt)
+	 * 		0110: SETUP data packet received
+	 * 		Others: Reserved
+	 */
+	switch (pktsts) {
+		case 0x06: //0110: SETUP data packet received
+			break;
+		case 0x02: //0010: OUT data packet received
+			break;
 	}
 }
 
@@ -325,18 +429,24 @@ void gintsts_handler()
 	if (gintsts & USB_OTG_GINTSTS_USBRST)
 	{
 		/* do something */
-
+		usbrst_handler();
 
 		/* clears the interrupt */
 		USB_OTG_HS_GLOBAL->GINTSTS |= USB_OTG_GINTSTS_USBRST;
 	}
 	else if (gintsts & USB_OTG_GINTSTS_ENUMDNE)
 	{
+		enumdne_handler();
 
+		/* clear the interrupt */
+		USB_OTG_HS_GLOBAL->GINTSTS |= USB_OTG_GINTSTS_ENUMDNE;
 	}
 	else if (gintsts & USB_OTG_GINTSTS_RXFLVL)
 	{
+		rxflvl_handler();
 
+		/* clear interrupt */
+		USB_OTG_HS_GLOBAL->GINTSTS |= USB_OTG_GINTSTS_RXFLVL;
 	}
 	else if (gintsts & USB_OTG_GINTSTS_IEPINT)
 	{
