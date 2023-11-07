@@ -29,7 +29,9 @@ static void flush_txfifo(uint8_t endpoint_number);
 static void disconnect();
 static void connect();
 static void initialize_core();
+static void set_device_address(uint8_t address);
 static void initialize_gpio_pins();
+static void gintsts_handler();
 
 const UsbDriver usb_driver = {
 	.initialize_core = &initialize_core,
@@ -40,7 +42,9 @@ const UsbDriver usb_driver = {
 	.flush_txfifo = &flush_txfifo,
 	.configure_in_endpoint = &configure_in_endpoint,
 	.read_packet = &read_packet,
-	.write_packet = &write_packet
+	.write_packet = &write_packet,
+	.poll = &gintsts_handler,
+	.set_device_address = &set_device_address
 };
 
 static void initialize_gpio_pins()
@@ -139,6 +143,21 @@ static void initialize_core()
 	 */
 	USB_OTG_HS_DEVICE->DOEPMSK |= USB_OTG_DOEPMSK_XFRCM;
 	USB_OTG_HS_DEVICE->DIEPMSK |= USB_OTG_DIEPMSK_XFRCM;
+}
+
+static void set_device_address(uint8_t address)
+{
+	/**
+	 * OTG_HS device configuration register (OTG_HS_DCFG)
+	 * 		Bits 10:4 DAD: Device address
+	 * 			The application must program this field after every
+	 * 			SetAddress control command.
+	 */
+	MODIFY_REG(
+		USB_OTG_HS_DEVICE->DCFG,
+		USB_OTG_DCFG_DAD,
+		_VAL2FLD(USB_OTG_DCFG_DAD, address)
+	);
 }
 
 /**
@@ -469,6 +488,8 @@ static void usbrst_handler()
 	{
 		deconfigure_endpoint(i);
 	}
+
+	usb_events.on_usb_reset_received();
 }
 
 static void enumdne_handler()
@@ -507,6 +528,7 @@ static void rxflvl_handler()
 	 */
 	switch (pktsts) {
 		case 0x06: //0110: SETUP data packet received
+			usb_events.on_setup_data_received(endpoint_number, bcnt);
 			break;
 		case 0x02: //0010: OUT data packet received
 			break;
@@ -525,8 +547,10 @@ static void rxflvl_handler()
 
 /**
  * handle the USB core interrupts
+ *
+ * global interrupt status handler
  */
-void gintsts_handler()
+static void gintsts_handler()
 {
 	volatile uint32_t gintsts = USB_OTG_HS_GLOBAL->GINTSTS;
 

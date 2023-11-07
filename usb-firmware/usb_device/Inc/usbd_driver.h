@@ -68,8 +68,11 @@ typedef struct {
 	void (*configure_in_endpoint)(uint8_t endpoint_number, enum UsbEndpointType endpoint_type, uint16_t endpoint_size);
 	void (*read_packet)(void const *buffer, uint16_t size);
 	void (*write_packet)(uint8_t endpoint_number, void const *buffer, uint16_t size);
+	void (*poll)();
+	void (*set_device_address)(uint8_t address);
 } UsbDriver;
 
 extern const UsbDriver usb_driver;
+extern UsbEvents usb_events;
 
 #endif /* USBD_DRIVER_H_ */
