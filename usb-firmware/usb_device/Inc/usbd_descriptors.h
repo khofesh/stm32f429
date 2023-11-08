@@ -27,4 +27,18 @@ const UsbDeviceDescriptor device_descriptor = {
     .bNumConfigurations = 1,
 };
 
+const UsbConfigurationDescriptor configuration_descriptor = {
+
+};
+
+typedef struct {
+	UsbConfigurationDescriptor usb_configuration_descriptor;
+} UsbConfigurationDescriptorCombination;
+
+const UsbConfigurationDescriptorCombination configuration_descriptor_combination = {
+		.usb_configuration_descriptor = {
+
+		}
+};
+
 #endif /* USBD_DESCRIPTORS_H_ */

@@ -66,22 +66,6 @@ In STM32F429ZI microcontroller (based on ARM Cortex-M4) we basically have 5 inte
 
 # wireshark
 
-Wireshark is an open-source software used mainly to view and debug network traffic. It also supports viewing USB transactions. We will be using Wireshark to view and debug the packets sent OUT to / IN from our USB device.
-
-I highly recommend using Linux to debug the USB device, because it has a very nice and reliable log for the enumeration of USB devices. You can use any Linux distribution (that has GUI).
-
-Below I will show you the TL;DR of how to install Wireshark on Linux (Ubuntu Distribution).
-
-NOTE: If you are using Raspberry Pi, I highly recommend that you create a new user (and add it to sudo group) and install Wireshark on the new user. Wireshark on the default user pi didn't work properly for some reason.
-
-## Installs Wireshark and its dependencies.
-
-sudo apt install wireshark
-
-## Ensures that users without root permissions can capture packets.
-
-sudo dpkg-reconfigure wireshark-common
-
 ## Adds the current user to wireshark group.
 
 sudo adduser $USER wireshark
@@ -99,3 +83,10 @@ sudo setfacl -m u:$USER:r /dev/usbmon\*
 References:
 
 https://wiki.wireshark.org/CaptureSetup/USB
+
+# wireshark filter
+
+```
+usb.bcdUSB == 0x0200
+usb.bDescriptorType == 0x01
+```
