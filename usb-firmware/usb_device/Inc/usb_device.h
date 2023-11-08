@@ -20,9 +20,9 @@ typedef struct
 	uint8_t configuration_value;
 
 	/* UsbDeviceOutInBufferPointers */
-	void const *ptr_out_buffer;
+	void *ptr_out_buffer;
 	uint32_t out_data_size;
-	void const *ptr_in_buffer;
+	const void *ptr_in_buffer;
 	uint32_t in_data_size;
 } UsbDevice;
 

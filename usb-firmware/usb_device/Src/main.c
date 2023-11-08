@@ -37,7 +37,7 @@ int main(void)
 {
 	log_info("program entrypoint");
 
-	usb_device.ptr_out_buffer = &buffer;
+	usb_device.ptr_out_buffer = buffer;
 
 	usbd_initialize(&usb_device);
 

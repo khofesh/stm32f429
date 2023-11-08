@@ -11,6 +11,8 @@
  *	35.13.6 	Device programming model
  */
 
+#include <strings.h>
+
 #include "usbd_driver.h"
 
 static void usbrst_handler();
@@ -31,6 +33,8 @@ static void connect();
 static void initialize_core();
 static void set_device_address(uint8_t address);
 static void initialize_gpio_pins();
+static void iepint_handler();
+static void oepint_handler();
 static void gintsts_handler();
 
 const UsbDriver usb_driver = {
@@ -195,7 +199,7 @@ static void read_packet(void const *buffer, uint16_t size)
 	for(; size >= 4; size -=4, buffer += 4)
 	{
 		/* pop one 32-bit word of data (until there is less than one word remaining) */
-		uint32_t data = *fifo;
+		volatile uint32_t data = *fifo;
 
 		/* stores the data in the buffer */
 		*((uint32_t *)buffer) = data;
@@ -204,7 +208,7 @@ static void read_packet(void const *buffer, uint16_t size)
 	if(size > 0)
 	{
 		/* pop the last remaining bytes (which are less than one word) */
-		uint32_t data = *fifo;
+		volatile uint32_t data = *fifo;
 
 		/* 1 byte */
 		for(; size > 0; size--, buffer++, data >>= 8)
@@ -546,6 +550,47 @@ static void rxflvl_handler()
 }
 
 /**
+ * handles the interrupt raised when an IN endpoint has a
+ * raised interrupt
+ */
+static void iepint_handler()
+{
+	/**
+	 * find the endpoint that caused the interrupt
+	 *
+	 * OTG_HS device all endpoints interrupt register (OTG_HS_DAINT)
+	 * 		Bits 15:0 IEPINT: IN endpoint interrupt bits
+	 *
+	 * https://man7.org/linux/man-pages/man3/ffs.3.html
+	 * ffs, ffsl, ffsll - find first bit set in a word
+	 */
+	uint8_t endpoint_number = ffs((int)USB_OTG_HS_DEVICE->DAINT) - 1;
+
+	if (IN_ENDPOINT(endpoint_number)->DIEPINT & USB_OTG_DIEPINT_XFRC)
+	{
+		usb_events.on_in_transfer_completed(endpoint_number);
+
+		/* clear the interrupt flag */
+		IN_ENDPOINT(endpoint_number)->DIEPINT |= USB_OTG_DIEPINT_XFRC;
+	}
+}
+
+/**
+ * handles the interrupt raised when an OUT endpint has a raised interrupt
+ */
+static void oepint_handler()
+{
+	uint8_t endpoint_number = ffs(USB_OTG_HS_DEVICE->DAINT >> 16) - 1;
+
+	if (OUT_ENDPOINT(endpoint_number)->DOEPINT & USB_OTG_DOEPINT_XFRC)
+	{
+		usb_events.on_out_transfer_completed(endpoint_number);
+
+		OUT_ENDPOINT(endpoint_number)->DOEPINT |= USB_OTG_DOEPINT_XFRC;
+	}
+}
+
+/**
  * handle the USB core interrupts
  *
  * global interrupt status handler
@@ -578,12 +623,18 @@ static void gintsts_handler()
 	}
 	else if (gintsts & USB_OTG_GINTSTS_IEPINT)
 	{
+		iepint_handler();
 
+		USB_OTG_HS_GLOBAL->GINTSTS |= USB_OTG_GINTSTS_IEPINT;
 	}
 	else if (gintsts & USB_OTG_GINTSTS_OEPINT)
 	{
+		oepint_handler();
 
+		USB_OTG_HS_GLOBAL->GINTSTS |= USB_OTG_GINTSTS_OEPINT;
 	}
+
+	usb_events.on_usb_polled();
 }
 
 

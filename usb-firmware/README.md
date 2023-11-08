@@ -54,3 +54,48 @@ In STM32F429ZI microcontroller (based on ARM Cortex-M4) we basically have 5 inte
 #define USB_OTG_DIEPTXF_INEPTXSA_Msk             (0xFFFFUL << USB_OTG_DIEPTXF_INEPTXSA_Pos) /*!< 0x0000FFFF */
 #define USB_OTG_DIEPTXF_INEPTXSA                 USB_OTG_DIEPTXF_INEPTXSA_Msk  /*!< IN endpoint FIFOx transmit RAM start address */
 ```
+
+# USB component sources
+
+- https://www.keil.com/pack/doc/mw/USB/html/index.html
+- https://www.keil.com/pack/doc/mw/USB/html/_u_s_b__device__descriptor.html
+- https://wiki.st.com/stm32mcu/wiki/Introduction_to_USB_with_STM32
+- usb paper - https://usb.org/sites/default/files/usbmassbulk_10.pdf
+
+![device descriptor](./images/Screenshot%20from%202023-11-08%2020-37-52.png)
+
+# wireshark
+
+Wireshark is an open-source software used mainly to view and debug network traffic. It also supports viewing USB transactions. We will be using Wireshark to view and debug the packets sent OUT to / IN from our USB device.
+
+I highly recommend using Linux to debug the USB device, because it has a very nice and reliable log for the enumeration of USB devices. You can use any Linux distribution (that has GUI).
+
+Below I will show you the TL;DR of how to install Wireshark on Linux (Ubuntu Distribution).
+
+NOTE: If you are using Raspberry Pi, I highly recommend that you create a new user (and add it to sudo group) and install Wireshark on the new user. Wireshark on the default user pi didn't work properly for some reason.
+
+## Installs Wireshark and its dependencies.
+
+sudo apt install wireshark
+
+## Ensures that users without root permissions can capture packets.
+
+sudo dpkg-reconfigure wireshark-common
+
+## Adds the current user to wireshark group.
+
+sudo adduser $USER wireshark
+
+## You need to execute the following two commands every time you reboot your Linux system:
+
+## Loads usbmon module to the kernel.
+
+modprobe usbmon
+
+## Gives regular users permissions to use the kernel module.
+
+sudo setfacl -m u:$USER:r /dev/usbmon\*
+
+References:
+
+https://wiki.wireshark.org/CaptureSetup/USB
