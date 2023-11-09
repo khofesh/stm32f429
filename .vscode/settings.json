@@ -1,0 +1,6 @@
+{
+  "files.associations": {
+    "*.yaml": "yaml",
+    "usb_standards.h": "c"
+  }
+}

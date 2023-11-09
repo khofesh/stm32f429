@@ -33,7 +33,7 @@ UsbEvents usb_events = {
 	.on_setup_data_received = &setup_data_received_handler,
 	.on_usb_polled = &usb_polled_handler,
 	.on_in_transfer_completed = &in_transfer_completed_handler,
-	.on_out_transfer_completed = &out_transfer_completed_handler
+	.on_out_transfer_completed = &out_transfer_completed_handler,
 };
 
 void usbd_initialize(UsbDevice *usb_device)
@@ -53,16 +53,14 @@ void usbd_poll()
 void usbd_configure()
 {
 	usb_driver.configure_in_endpoint(
-		(configuration_descriptor_combination.usb_endpoint_descriptor.bEndpointAddress & 0x0F),
-		(configuration_descriptor_combination.usb_endpoint_descriptor.bmAttributes & 0x03),
-		configuration_descriptor_combination.usb_endpoint_descriptor.wMaxPacketSize
-	);
+		(configuration_descriptor_combination.usb_mouse_endpoint_descriptor.bEndpointAddress & 0x0F),
+		(configuration_descriptor_combination.usb_mouse_endpoint_descriptor.bmAttributes & 0x03),
+		configuration_descriptor_combination.usb_mouse_endpoint_descriptor.wMaxPacketSize);
 
 	usb_driver.write_packet(
-		(configuration_descriptor_combination.usb_endpoint_descriptor.bEndpointAddress & 0x0F),
+		(configuration_descriptor_combination.usb_mouse_endpoint_descriptor.bEndpointAddress & 0x0F),
 		NULL,
-		0
-	);
+		0);
 }
 
 static void process_standard_device_request()
@@ -74,8 +72,8 @@ static void process_standard_device_request()
 	case USB_STANDARD_GET_DESCRIPTOR:
 		log_info("Standard get descriptor request received");
 		const uint8_t descriptor_type = request->wValue >> 8;
-		const uint16_t descriptor_length = request->wValue;
-		//const uint8_t descriptor_index = request->wValue & 0xFF;
+		const uint16_t descriptor_length = request->wLength;
+		// const uint8_t descriptor_index = request->wValue & 0xFF;
 
 		switch (descriptor_type)
 		{
@@ -109,9 +107,9 @@ static void process_standard_device_request()
 		break;
 	case USB_STANDARD_SET_CONFIG:
 		log_info("Standard Set Configuration request received.");
-    	usbd_handle->configuration_value = request->wValue;
-        usbd_configure();
-    	usbd_handle->device_state = USB_DEVICE_STATE_CONFIGURED;
+		usbd_handle->configuration_value = request->wValue;
+		usbd_configure();
+		usbd_handle->device_state = USB_DEVICE_STATE_CONFIGURED;
 		log_info("Switching control transfer stage to IN-STATUS.");
 		usbd_handle->control_transfer_stage = USB_CONTROL_STAGE_STATUS_IN;
 		break;
@@ -130,7 +128,7 @@ static void process_control_transfer_stage()
 		log_info("processing IN-DATA stage");
 
 		uint8_t data_size = MIN(usbd_handle->in_data_size,
-				device_descriptor.bMaxPacketSize0);
+								device_descriptor.bMaxPacketSize0);
 		usb_driver.write_packet(0, usbd_handle->ptr_in_buffer, data_size);
 
 		usbd_handle->in_data_size -= data_size;
@@ -180,14 +178,12 @@ static void write_mouse_report()
 	log_debug("Sending USB HID mouse report.");
 
 	HidReport hid_report = {
-		.x = 5
-	};
+		.x = 5};
 
-    usb_driver.write_packet(
-		(configuration_descriptor_combination.usb_endpoint_descriptor.bEndpointAddress & 0x0F),
+	usb_driver.write_packet(
+		(configuration_descriptor_combination.usb_mouse_endpoint_descriptor.bEndpointAddress & 0x0F),
 		&hid_report,
-		sizeof(hid_report)
-	);
+		sizeof(hid_report));
 }
 
 static void in_transfer_completed_handler(uint8_t endpoint_number)
@@ -208,7 +204,7 @@ static void in_transfer_completed_handler(uint8_t endpoint_number)
 	 * "& 0x0F" ignore the highest 4 bits
 	 * from 0x83 -> 0x03
 	 */
-	if (endpoint_number == (configuration_descriptor_combination.usb_endpoint_descriptor.bEndpointAddress & 0x0F))
+	if (endpoint_number == (configuration_descriptor_combination.usb_mouse_endpoint_descriptor.bEndpointAddress & 0x0F))
 	{
 		write_mouse_report();
 	}
@@ -216,7 +212,6 @@ static void in_transfer_completed_handler(uint8_t endpoint_number)
 
 static void out_transfer_completed_handler(uint8_t endpoint_number)
 {
-
 }
 
 static void process_class_interface_request()
@@ -241,7 +236,7 @@ static void process_standard_interface_request()
 	switch (request->wValue >> 8)
 	{
 	case USB_DESCRIPTOR_TYPE_HID_REPORT:
-		usbd_handle->ptr_in_buffer = &usbd_handle;
+		usbd_handle->ptr_in_buffer = &hid_report_descriptor;
 		usbd_handle->in_data_size = sizeof(hid_report_descriptor);
 
 		log_info("switching control transfer stage to IN-STATUS");
