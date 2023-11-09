@@ -97,6 +97,14 @@ usb.bcdUSB == 0x0200
 usb.bDescriptorType == 0x01
 ```
 
+## wireshark too big on HiDPI and wayland
+
+```shell
+QT_SCALE_FACTOR=0.9 wireshark
+```
+
+0.9 looks better
+
 # what is `__atribute__((__packed__))`
 
 Sure, I can help you understand the code.
