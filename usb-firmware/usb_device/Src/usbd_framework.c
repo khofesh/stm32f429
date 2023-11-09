@@ -22,6 +22,7 @@ static void process_control_transfer_stage();
 static void usb_polled_handler();
 static void in_transfer_completed_handler(uint8_t endpoint_number);
 static void out_transfer_completed_handler(uint8_t endpoint_number);
+static void process_class_interface_request();
 
 static UsbDevice *usbd_handle;
 
@@ -182,6 +183,21 @@ static void out_transfer_completed_handler(uint8_t endpoint_number)
 
 }
 
+static void process_class_interface_request()
+{
+	UsbRequest const *request = usbd_handle->ptr_out_buffer;
+
+	switch (request->bRequest)
+	{
+	case USB_HID_SETIDLE:
+		log_info("switching control transfer stage to IN-STATUS");
+		usbd_handle->control_transfer_stage = USB_CONTROL_STAGE_STATUS_IN;
+		break;
+	default:
+		break;
+	}
+}
+
 static void process_request()
 {
 	UsbRequest const *request = usbd_handle->ptr_out_buffer;
@@ -190,6 +206,9 @@ static void process_request()
 	{
 	case USB_BM_REQUEST_TYPE_TYPE_STANDARD | USB_BM_REQUEST_TYPE_RECIPIENT_DEVICE:
 		process_standard_device_request();
+		break;
+	case USB_BM_REQUEST_TYPE_TYPE_CLASS | USB_DESCRIPTOR_TYPE_INTERFACE:
+		process_class_interface_request();
 		break;
 	default:
 		break;
