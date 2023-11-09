@@ -24,6 +24,7 @@ static void in_transfer_completed_handler(uint8_t endpoint_number);
 static void out_transfer_completed_handler(uint8_t endpoint_number);
 static void process_class_interface_request();
 static void process_standard_interface_request();
+static void write_mouse_report();
 
 static UsbDevice *usbd_handle;
 
@@ -51,7 +52,17 @@ void usbd_poll()
 
 void usbd_configure()
 {
+	usb_driver.configure_in_endpoint(
+		(configuration_descriptor_combination.usb_endpoint_descriptor.bEndpointAddress & 0x0F),
+		(configuration_descriptor_combination.usb_endpoint_descriptor.bmAttributes & 0x03),
+		configuration_descriptor_combination.usb_endpoint_descriptor.wMaxPacketSize
+	);
 
+	usb_driver.write_packet(
+		(configuration_descriptor_combination.usb_endpoint_descriptor.bEndpointAddress & 0x0F),
+		NULL,
+		0
+	);
 }
 
 static void process_standard_device_request()
@@ -164,6 +175,21 @@ static void usb_polled_handler()
 	process_control_transfer_stage();
 }
 
+static void write_mouse_report()
+{
+	log_debug("Sending USB HID mouse report.");
+
+	HidReport hid_report = {
+		.x = 5
+	};
+
+    usb_driver.write_packet(
+		(configuration_descriptor_combination.usb_endpoint_descriptor.bEndpointAddress & 0x0F),
+		&hid_report,
+		sizeof(hid_report)
+	);
+}
+
 static void in_transfer_completed_handler(uint8_t endpoint_number)
 {
 	if (usbd_handle->in_data_size)
@@ -176,6 +202,15 @@ static void in_transfer_completed_handler(uint8_t endpoint_number)
 		usb_driver.write_packet(0, NULL, 0);
 		log_info("switching control stage to OUT-STATUS");
 		usbd_handle->control_transfer_stage = USB_CONTROL_STAGE_STATUS_OUT;
+	}
+
+	/**
+	 * "& 0x0F" ignore the highest 4 bits
+	 * from 0x83 -> 0x03
+	 */
+	if (endpoint_number == (configuration_descriptor_combination.usb_endpoint_descriptor.bEndpointAddress & 0x0F))
+	{
+		write_mouse_report();
 	}
 }
 
