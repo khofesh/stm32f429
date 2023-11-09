@@ -109,6 +109,21 @@ after adding `__attribute__((__packed__)) UsbConfigurationDescriptor`, you could
 
 ![9 bytes](./images/Screenshot%20from%202023-11-09%2017-14-24.png)
 
+# error explanation
+
+the error
+
+```shell
+[46261.169970] usb 5-3.4.1: new full-speed USB device number 90 using xhci_hcd
+[46261.329686] usb 5-3.4.1: device descriptor read/all, error -75
+```
+
+```shell
+$ sudo dnf install moreutils
+$ errno 75
+EOVERFLOW 75 Value too large for defined data type
+```
+
 # References
 
 - https://www.usb.org/documents (USB document library)
