@@ -68,25 +68,47 @@ In STM32F429ZI microcontroller (based on ARM Cortex-M4) we basically have 5 inte
 
 ## Adds the current user to wireshark group.
 
+```shell
 sudo adduser $USER wireshark
+```
 
 ## You need to execute the following two commands every time you reboot your Linux system:
 
 ## Loads usbmon module to the kernel.
 
+```shell
 modprobe usbmon
+```
 
 ## Gives regular users permissions to use the kernel module.
 
-sudo setfacl -m u:$USER:r /dev/usbmon\*
+```shell
+sudo setfacl -m u:$USER:r /dev/usbmon*
+```
 
 References:
 
 https://wiki.wireshark.org/CaptureSetup/USB
 
-# wireshark filter
+## wireshark filter
 
 ```
 usb.bcdUSB == 0x0200
 usb.bDescriptorType == 0x01
 ```
+
+# what is `__atribute__((__packed__))`
+
+Sure, I can help you understand the code.
+
+The `__attribute__((__packed__))` directive is used to pack the members of the UsbConfigurationDescriptor struct together in memory. This means that there will be no padding between the members of the struct, which can save space.
+
+The `__packed__` directive is typically used for structs that are going to be accessed by hardware, such as device registers. This is because hardware typically does not care about the alignment of the members of a struct, and it is more efficient to store the members of a struct as tightly packed as possible.
+
+after adding `__attribute__((__packed__)) UsbConfigurationDescriptor`, you could see the `bLength` is exactly 9 bytes
+
+![9 bytes](./images/Screenshot%20from%202023-11-09%2017-14-24.png)
+
+# References
+
+- https://www.usb.org/documents (USB document library)
