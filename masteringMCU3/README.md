@@ -1,3 +1,5 @@
+# DOESN'T WORK, take the udemy course instead
+
 # clock config
 
 ![config](./images/Screenshot%20from%202023-11-11%2011-04-57.png)
