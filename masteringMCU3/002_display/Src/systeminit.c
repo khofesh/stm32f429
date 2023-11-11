@@ -34,6 +34,21 @@ static void configure_clock()
 	/* wait until HSE is stable */
 	while(!READ_BIT(RCC->CR, RCC_CR_HSERDY));
 
+	/** over drive settings **/
+	/* enable clock for PWR */
+	RCC->APB1ENR |= RCC_APB1ENR_PWREN;
+	MODIFY_REG(
+		PWR->CR,
+		PWR_CR_VOS,
+		_VAL2FLD(PWR_CR_VOS, 0x3)
+	);
+	/* activate over drive mode */
+	PWR->CR |= PWR_CR_ODEN;
+	/* wait for over drive ready */
+	while(!READ_BIT(PWR->CSR, PWR_CSR_ODRDY));
+	/* over drive switch enable */
+	PWR->CR |= PWR_CR_ODSWEN;
+
 	/**
 	 * configure PLL
 	 *
@@ -44,7 +59,7 @@ static void configure_clock()
 	MODIFY_REG(
 		RCC->PLLCFGR,
 		RCC_PLLCFGR_PLLM | RCC_PLLCFGR_PLLN | RCC_PLLCFGR_PLLP | RCC_PLLCFGR_PLLQ | RCC_PLLCFGR_PLLSRC,
-		_VAL2FLD(RCC_PLLCFGR_PLLM, 4) | _VAL2FLD(RCC_PLLCFGR_PLLN, 168) |
+		_VAL2FLD(RCC_PLLCFGR_PLLM, 4) | _VAL2FLD(RCC_PLLCFGR_PLLN, 180) |
 		_VAL2FLD(RCC_PLLCFGR_PLLP, 2) | _VAL2FLD(RCC_PLLCFGR_PLLQ, 7) |
 		_VAL2FLD(RCC_PLLCFGR_PLLSRC, 1)
 	);
