@@ -27,3 +27,9 @@ APB1 prescaler /4
 APB2 prescaler /2
 AHB prescaler /1
 ```
+
+# references
+
+- https://blog.embeddedexpert.io/?p=2077
+- https://blog.embeddedexpert.io/?p=2081
+- https://www.udemy.com/course/mastering-microcontroller-stm32-ltdc-lcd-tft-lvgl/
