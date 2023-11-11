@@ -111,9 +111,12 @@ void LCD_RST()
 
 void LCD_Write_Cmd(uint8_t cmd)
 {
+	/* CS low - to accept SPI data */
 	LCD_CS_LOW();
+	/* DC low - command mode */
 	LCD_DC_LOW();
 	spi5_transmit(&cmd,1);
+	/* CS high - end of transmission */
 	LCD_CS_HIGH();
 }
 

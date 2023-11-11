@@ -18,12 +18,28 @@
 
 #include <stdint.h>
 
+#include "LCD_Pins.h"
+#include "ILI9341.h"
+
 #if !defined(__SOFT_FP__) && defined(__ARM_FP)
   #warning "FPU is not initialized, but the project is compiling for an FPU. Please initialize the FPU before use."
 #endif
 
+#define ever	;;
+
 int main(void)
 {
+	delay_init(180000000);
+	LCD_Pin_Init();
+	LCD_SPI_Init();
+	ILI9341_Init();
+	ILI9341_setRotation(2);
+	ILI9341_Fill(COLOR_RED);
+
     /* Loop forever */
-	for(;;);
+	for(;;)
+	{
+		ILI9341_Fill(COLOR_YELLOW);
+		ILI9341_Fill(COLOR_PURPLE);
+	}
 }
